@@ -12,14 +12,14 @@
 static void init();
 static double getAesDecryptionsPerSecond();
 static double getpbkdfAesDecryptionsPerSecond();
-static void doAesDecrypt(unsigned char* ciphertext, symmetric_key& key, unsigned char* plaintext);
+static void doAesDecrypt(unsigned char* ciphertext, unsigned char* raw_aes_key, unsigned char* plaintext);
 static void doPbkdfAesDecrypt(unsigned char* ciphertext, unsigned char* password, unsigned char* plaintext);
 static double computeOpsPerSecond(LARGE_INTEGER& start, LARGE_INTEGER& end, unsigned int numOps);
 
 #define AES_KEY_SIZE_BYTES			16
 #define AES_BLOCK_SIZE_BYTES		16
 #define	PBKDF_SALT_SIZE_BYTES		16
-#define PBKDF_ITERATION_COUNT		4000
+#define PBKDF_ITERATION_COUNT		2000
 #define	INPUT_PASSWORD_SIZE_BYTES	8
 
 #define AES_DECRYPTS				100000000
@@ -45,7 +45,6 @@ static double computeOpsPerSecond(LARGE_INTEGER& start, LARGE_INTEGER& end, unsi
 static prng_state prng;
 static unsigned char salt[PBKDF_SALT_SIZE_BYTES];
 static unsigned char raw_aes_key[AES_KEY_SIZE_BYTES];
-static symmetric_key scheduled_aes_key;
 static unsigned char password[INPUT_PASSWORD_SIZE_BYTES];
 static unsigned char ciphertext[AES_BLOCK_SIZE_BYTES];
 static int hmac_hash_index;
@@ -116,8 +115,6 @@ static void init() {
 	prng_descriptor[prng_index].read(salt, sizeof(salt), &prng);
 	prng_descriptor[prng_index].read(password, sizeof(password), &prng);
 	prng_descriptor[prng_index].read(ciphertext, sizeof(ciphertext), &prng);
-
-	TRY_LTC(::aes_setup(raw_aes_key, sizeof(raw_aes_key), 0, &scheduled_aes_key));
 	
 	
 }
@@ -131,7 +128,7 @@ static double getAesDecryptionsPerSecond() {
 	unsigned char plaintext[AES_BLOCK_SIZE_BYTES];
 
 	for (unsigned int i = 0; i < AES_DECRYPTS; i++) {
-		doAesDecrypt(ciphertext, scheduled_aes_key, plaintext);
+		doAesDecrypt(ciphertext, raw_aes_key, plaintext);
 	}
 
 	LARGE_INTEGER end;
@@ -162,8 +159,13 @@ static double getpbkdfAesDecryptionsPerSecond() {
 	return computeOpsPerSecond(start, end, PBKDF_AES_DECRYPTS);
 }
 
-static void doAesDecrypt(unsigned char* ciphertext, symmetric_key& key, unsigned char* plaintext) {
-	TRY_LTC(::aes_ecb_decrypt(ciphertext, plaintext, &key));
+static void doAesDecrypt(unsigned char* ciphertext, unsigned char* raw_aes_key, unsigned char* plaintext) {
+	symmetric_key aes_key;
+	TRY_LTC(::aes_setup(raw_aes_key, 
+		AES_KEY_SIZE_BYTES,
+		0,
+		&aes_key));
+	TRY_LTC(::aes_ecb_decrypt(ciphertext, plaintext, &aes_key));
 }
 
 static void doPbkdfAesDecrypt(unsigned char* ciphertext, unsigned char* password, unsigned char* plaintext) {
@@ -181,13 +183,7 @@ static void doPbkdfAesDecrypt(unsigned char* ciphertext, unsigned char* password
 
 	_ASSERT(outlen == sizeof(derived_aes_key));
 
-	symmetric_key aes_key;
-	TRY_LTC(::aes_setup(derived_aes_key, 
-		outlen,
-		0,
-		&aes_key));
-
-	doAesDecrypt(ciphertext, aes_key, plaintext);
+	doAesDecrypt(ciphertext, derived_aes_key, plaintext);
 }
 
 static double computeOpsPerSecond(LARGE_INTEGER& start, LARGE_INTEGER& end, unsigned int numOps) {
