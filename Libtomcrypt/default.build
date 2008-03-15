@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<project name="libtomcrypt" default="all">
+    <include buildfile="..\..\common.include" />
+
+    <target name="build">
+      <echo message="Building libtomcrypt" />
+      <property name="build-solution" value="libtomcrypt.sln" />
+      <call target="vcbuild" />
+      <echo message="Done Building libtomcrypt" />
+    </target>
+
+    <target name="test">
+
+    </target>
+
+    <target name="ccnet.registerSymbols">
+    </target>
+
+    <target name="ccnet.dist">
+    </target>
+
+    <target name="all" depends="build,test">
+    </target>
+</project>
